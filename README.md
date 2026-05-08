@@ -26,7 +26,26 @@
 
 ## 使用方式
 
-安装依赖后运行：
+建议先创建并启用虚拟环境：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+安装 Python 依赖：
+
+```powershell
+pip install -r requirements.txt
+```
+
+首次使用 Playwright 时，需要安装浏览器运行环境：
+
+```powershell
+python -m playwright install chromium
+```
+
+运行脚本：
 
 ```powershell
 python GEC_output_data.py
