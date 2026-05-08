@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+
+# Runtime outputs
+logs/
+screenshots/
+*.log
+*.xlsx
+
+# Local login/session state. Do not commit cookies or browser storage.
+gec_storage_state.json
+
+# Local environment
+.env
+.venv/
+venv/
