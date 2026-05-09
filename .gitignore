@@ -4,6 +4,7 @@ __pycache__/
 # Runtime outputs
 logs/
 screenshots/
+cache/
 *.log
 *.xlsx
 
@@ -12,5 +13,6 @@ gec_storage_state.json
 
 # Local environment
 .env
+local_config.py
 .venv/
 venv/
