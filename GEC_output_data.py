@@ -1,7 +1,9 @@
 import json
 import os
+import random
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -23,10 +25,15 @@ API_URLS = {
 }
 API_URL = API_URLS["流出"]
 TOP_N = 10
-NAVIGATION_TIMEOUT_MS = 120000
+NAVIGATION_TIMEOUT_MS = 300000
 ACTION_DELAY_MS = 1000
+PAGE_TURN_DELAY_MIN_MS = 6000
+PAGE_TURN_DELAY_MAX_MS = 12000
+RATE_LIMIT_COOLDOWN_MS = 120000
+RATE_LIMIT_TEXT = "访问过于频繁"
 OUTPUT_EXCEL = "GEC绿证市场情况.xlsx"
 LISTED_PRODUCTS_EXCEL = "GEC_绿证挂牌产品.xlsx"
+DESKTOP_OUTPUT_DIR = Path.home() / "Desktop"
 CACHE_DIR = Path("cache")
 LISTED_PRODUCTS_CACHE = CACHE_DIR / "listed_products_cache.json"
 EXPORT_HOME_FLOW_DATA = True
@@ -101,10 +108,12 @@ def _safe_float(value, default=0):
 
 
 def _timestamped_excel_path(output_path):
+    output_path = Path(output_path)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if output_path.lower().endswith(".xlsx"):
-        return output_path[:-5] + f"_{timestamp}.xlsx"
-    return f"{output_path}_{timestamp}.xlsx"
+    output_dir = DESKTOP_OUTPUT_DIR if DESKTOP_OUTPUT_DIR.exists() else Path.cwd()
+    file_stem = output_path.stem
+    file_suffix = output_path.suffix or ".xlsx"
+    return str(output_dir / f"{file_stem}_{timestamp}{file_suffix}")
 
 
 def _sort_key(item):
@@ -387,6 +396,29 @@ def wait_for_product_cards(page):
     return False
 
 
+def human_pause(min_ms=PAGE_TURN_DELAY_MIN_MS, max_ms=PAGE_TURN_DELAY_MAX_MS):
+    delay_ms = random.randint(min_ms, max_ms)
+    print(f"等待 {delay_ms}ms，降低访问频率...")
+    # 用标准 sleep，避免页面最小化时浏览器定时器被节流影响等待节奏。
+    time.sleep(delay_ms / 1000)
+
+
+def handle_rate_limit_notice(page):
+    try:
+        notice = page.get_by_text(RATE_LIMIT_TEXT)
+        if notice.count() == 0:
+            return False
+
+        if notice.first.is_visible(timeout=1000):
+            print(f"检测到“{RATE_LIMIT_TEXT}”提示，暂停 {RATE_LIMIT_COOLDOWN_MS}ms 后继续。")
+            human_pause(RATE_LIMIT_COOLDOWN_MS, RATE_LIMIT_COOLDOWN_MS)
+            return True
+    except Exception:
+        return False
+
+    return False
+
+
 def set_listed_products_page_size(page, page_size=LISTED_PRODUCTS_PAGE_SIZE):
     if not page_size:
         return False
@@ -428,9 +460,11 @@ def _go_to_next_product_page(page):
             return False
 
         next_button.click(timeout=60000)
+        human_pause()
         deadline = datetime.now().timestamp() + PAGE_CHANGE_TIMEOUT_MS / 1000
 
         while datetime.now().timestamp() < deadline:
+            handle_rate_limit_notice(page)
             page.wait_for_timeout(ACTION_DELAY_MS)
             after_key = _get_first_product_key(page)
             after_page_number = _get_active_page_number(page)
